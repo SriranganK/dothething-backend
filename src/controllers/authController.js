@@ -13,8 +13,16 @@ const register = async (req, res) => {
       return res.status(400).json({ message: 'Please provide name, email, and password' });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+    const hasMinLength = password.length >= 8;
+    const hasUppercase = /[A-Z]/.test(password);
+    const hasLowercase = /[a-z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    const hasSpecial = /[^A-Za-z0-9]/.test(password);
+
+    if (!hasMinLength || !hasUppercase || !hasLowercase || !hasNumber || !hasSpecial) {
+      return res.status(400).json({
+        message: 'Password must be at least 8 characters long, and include at least one uppercase letter, one lowercase letter, one number, and one special character.'
+      });
     }
 
     const data = await authService.registerUser({
@@ -263,6 +271,21 @@ const resetPassword = async (req, res) => {
   }
 };
 
+const checkInvitation = async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({ message: 'Email query parameter is required' });
+    }
+    const Invitation = require('../models/Invitation');
+    const cleanEmail = email.toLowerCase().trim();
+    const invite = await Invitation.findOne({ email: cleanEmail, status: 'PENDING' });
+    res.status(200).json({ hasInvitation: !!invite });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -273,4 +296,5 @@ module.exports = {
   forgotPassword,
   verifyOTP,
   resetPassword,
+  checkInvitation,
 };

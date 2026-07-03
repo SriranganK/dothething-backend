@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
+const path = require('path');
 const { Server } = require('socket.io');
 require('dotenv').config();
 
@@ -74,9 +75,20 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/expense-calc', expenseCalcRoutes);
 
-// Root route
-app.get('/', (req, res) => {
-  res.send('API is running...');
+// Serve static assets from frontend build
+const frontendBuildPath = process.env.FRONTEND_BUILD_PATH || path.join(__dirname, '../../dotheThing/dist');
+app.use(express.static(frontendBuildPath));
+
+// Wildcard routing fallback for SPA (React Router)
+app.get('*any', (req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    return next();
+  }
+  res.sendFile(path.join(frontendBuildPath, 'index.html'), (err) => {
+    if (err) {
+      res.status(404).send('Frontend build not found. Please run "npm run build" in dotheThing first.');
+    }
+  });
 });
 
 // Global Error Handler

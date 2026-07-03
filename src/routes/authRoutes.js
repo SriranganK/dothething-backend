@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { register, login, getMe, checkSSO, ssoLogin, verifyMFA, forgotPassword, verifyOTP, resetPassword } = require('../controllers/authController');
+const { register, login, getMe, checkSSO, ssoLogin, verifyMFA, forgotPassword, verifyOTP, resetPassword, checkInvitation } = require('../controllers/authController');
 const { protect } = require('../middlewares/auth');
 const { rateLimiter } = require('../middlewares/rateLimiter');
 
@@ -15,6 +15,7 @@ router.get('/me', protect, getMe);
 router.get('/check-sso', checkSSO);
 router.post('/sso-login', ssoLogin);
 router.post('/verify-mfa', verifyMFA);
+router.get('/check-invitation', checkInvitation);
 
 router.post('/forgot-password', forgotPasswordLimiter, forgotPassword);
 router.post('/verify-otp', verifyOTPLimiter, verifyOTP);
