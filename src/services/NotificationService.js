@@ -5,7 +5,7 @@ const Board = require('../models/Board');
 const Notification = require('../models/Notification');
 const NotificationDelivery = require('../models/NotificationDelivery');
 const NotificationPreference = require('../models/NotificationPreference');
-const { emailQueue, notificationQueue, pushQueue, safeAddToQueue } = require('../config/queue');
+const agenda = require('../config/agenda');
 
 class NotificationService {
   /**
@@ -372,32 +372,33 @@ class NotificationService {
         });
 
         let queued = false;
-        if (channel === 'IN_APP') {
-          const job = await safeAddToQueue(notificationQueue, 'in-app-delivery', {
-            deliveryId: delivery._id,
-            notificationId: notification._id
-          });
-          if (job) queued = true;
-        } else if (channel === 'EMAIL') {
-          const job = await safeAddToQueue(emailQueue, 'email-delivery', {
-            deliveryId: delivery._id,
-            notificationId: notification._id
-          }, {
-            attempts: 3,
-            backoff: { type: 'exponential', delay: 5000 }
-          });
-          if (job) queued = true;
-        } else if (channel === 'PUSH') {
-          const job = await safeAddToQueue(pushQueue, 'push-delivery', {
-            deliveryId: delivery._id,
-            notificationId: notification._id
-          });
-          if (job) queued = true;
+        try {
+          if (channel === 'IN_APP') {
+            const job = await agenda.now('in-app-delivery', {
+              deliveryId: delivery._id,
+              notificationId: notification._id
+            });
+            if (job) queued = true;
+          } else if (channel === 'EMAIL') {
+            const job = await agenda.now('email-delivery', {
+              deliveryId: delivery._id,
+              notificationId: notification._id
+            });
+            if (job) queued = true;
+          } else if (channel === 'PUSH') {
+            const job = await agenda.now('push-delivery', {
+              deliveryId: delivery._id,
+              notificationId: notification._id
+            });
+            if (job) queued = true;
+          }
+        } catch (err) {
+          console.error(`Failed to queue job for channel ${channel}:`, err.message);
         }
 
-        // Synchronous fallback if Redis is down/offline
+        // Synchronous fallback if Agenda queueing fails
         if (!queued) {
-          console.log(`Redis Queue offline. Processing ${channel} delivery synchronously in-process...`);
+          console.log(`Agenda Queue offline. Processing ${channel} delivery synchronously in-process...`);
           try {
             if (channel === 'IN_APP') {
               const { processNotificationJob } = require('../workers/notificationWorker');

@@ -30,7 +30,7 @@ const server = http.createServer(app);
 // Initialize Socket.IO
 const io = new Server(server, {
   cors: {
-    origin: ['http://localhost:5173', 'http://127.0.0.1:5173','http://localhost:5174', 'http://127.0.0.1:5174', '*'],
+    origin: '*',
     credentials: true,
     methods: ['GET', 'POST']
   }
@@ -38,21 +38,27 @@ const io = new Server(server, {
 SocketService.init(io);
 
 // Connect to Database & Load Workers / Cron
-connectDB().then(() => {
-  // Load workers
+connectDB().then(async () => {
+  // Load agenda and register job definitions by requiring workers
+  const agenda = require('./config/agenda');
   require('./workers/emailWorker');
   require('./workers/notificationWorker');
   require('./workers/pushWorker');
+  require('./workers/reminderWorker');
   
+  // Start Agenda
+  await agenda.start();
+  console.log('[Agenda] Worker process started successfully.');
+
   const { scheduleCronJobs } = require('./workers/reminderWorker');
-  scheduleCronJobs();
+  await scheduleCronJobs();
 }).catch(err => {
   console.error('Failed to initialize database/workers:', err.message);
 });
 
 // Middlewares
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173', '*','http://localhost:5174', 'http://127.0.0.1:5174'],
+  origin: '*',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -104,4 +110,20 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+
+// Graceful shutdown handling for Agenda
+const gracefulShutdown = async () => {
+  console.log('[Server] Gracefully shutting down...');
+  try {
+    const agenda = require('./config/agenda');
+    await agenda.stop();
+    console.log('[Agenda] Stopped successfully.');
+  } catch (err) {
+    console.error('[Agenda] Error during shutdown:', err.message);
+  }
+  process.exit(0);
+};
+
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
 

@@ -1,5 +1,4 @@
-const { Worker } = require('bullmq');
-const { connection, reminderQueue } = require('../config/queue');
+const agenda = require('../config/agenda');
 const User = require('../models/User');
 const Item = require('../models/Item');
 const Board = require('../models/Board');
@@ -218,61 +217,37 @@ const handleOverdueMilestones = async () => {
   }
 };
 
-const reminderWorker = new Worker('reminder-queue', async (job) => {
-  console.log(`Processing reminder-queue job: ${job.name}`);
-  try {
-    if (job.name === 'check-due-tomorrow') {
-      await handleDueTomorrow();
-      await handleDueSoonMilestones();
-    } else if (job.name === 'check-overdue-tasks') {
-      await handleOverdueTasks();
-      await handleOverdueMilestones();
-    } else if (job.name === 'send-weekly-summary') {
-      await handleWeeklySummary();
-    }
-  } catch (err) {
-    console.error(`Error in reminder worker job ${job.name}:`, err.message);
-    throw err;
-  }
-}, { connection });
+agenda.define('check-due-tomorrow', async (job) => {
+  console.log('Processing check-due-tomorrow job');
+  await handleDueTomorrow();
+  await handleDueSoonMilestones();
+});
 
-// Function to schedule cron repeatable jobs
+agenda.define('check-overdue-tasks', async (job) => {
+  console.log('Processing check-overdue-tasks job');
+  await handleOverdueTasks();
+  await handleOverdueMilestones();
+});
+
+agenda.define('send-weekly-summary', async (job) => {
+  console.log('Processing send-weekly-summary job');
+  await handleWeeklySummary();
+});
+
+// Function to schedule cron repeatable jobs using Agenda
 const scheduleCronJobs = async () => {
-  // If Redis is not connected, skip scheduling
-  if (connection.status !== 'ready') {
-    console.warn('Redis is not ready. Skipping cron jobs schedule.');
-    return;
-  }
-
   try {
-    // Clean old repeatables first to prevent duplicates
-    const repeatables = await reminderQueue.getRepeatableJobs();
-    for (const job of repeatables) {
-      await reminderQueue.removeRepeatableByKey(job.key);
-    }
+    // agenda.every(interval, name) automatically upserts/updates repeating jobs to prevent duplicates.
+    await agenda.every('1 hour', 'check-due-tomorrow');
+    await agenda.every('1 hour', 'check-overdue-tasks');
+    await agenda.every('0 9 * * 1', 'send-weekly-summary'); // Every Monday at 9:00 AM
 
-    // Schedule check-due-tomorrow: every hour (0 * * * *)
-    await reminderQueue.add('check-due-tomorrow', {}, {
-      repeat: { pattern: '0 * * * *' }
-    });
-
-    // Schedule check-overdue-tasks: every hour (0 * * * *)
-    await reminderQueue.add('check-overdue-tasks', {}, {
-      repeat: { pattern: '0 * * * *' }
-    });
-
-    // Schedule send-weekly-summary: every Monday at 9:00 AM (0 9 * * 1)
-    await reminderQueue.add('send-weekly-summary', {}, {
-      repeat: { pattern: '0 9 * * 1' }
-    });
-
-    console.log('Cron jobs successfully scheduled in BullMQ.');
+    console.log('Cron jobs successfully scheduled in Agenda.');
   } catch (err) {
-    console.error('Error scheduling cron repeatable jobs:', err.message);
+    console.error('Error scheduling cron repeatable jobs in Agenda:', err.message);
   }
 };
 
 module.exports = {
-  reminderWorker,
   scheduleCronJobs
 };

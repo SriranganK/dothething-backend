@@ -75,8 +75,36 @@ const sendOTPEmail = async (toEmail, otpCode) => {
   }
 };
 
+const sendRegistrationOTPEmail = async (toEmail, otpCode) => {
+  const smtpUser = process.env.SMTP_USER || 'dothethng@gmail.com';
+  
+  const { subject, html, text } = emailTemplateService.renderEmail('REGISTRATION_OTP', {
+    otpCode
+  });
+
+  const transporter = getTransporter();
+
+  const mailOptions = {
+    from: `"doTheThing Security" <${smtpUser}>`,
+    to: toEmail,
+    subject,
+    text,
+    html,
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`Registration verification OTP email successfully sent to ${toEmail}: ${info.messageId}`);
+    return info;
+  } catch (error) {
+    console.error(`Error sending registration OTP email to ${toEmail}:`, error.message);
+    throw error;
+  }
+};
+
 module.exports = {
   sendInviteEmail,
   sendOTPEmail,
+  sendRegistrationOTPEmail,
 };
 

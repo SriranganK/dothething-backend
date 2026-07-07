@@ -155,6 +155,30 @@ const renderEmail = (type, data = {}) => {
       break;
     }
 
+    case 'REGISTRATION_OTP': {
+      const { otpCode } = data;
+      subject = `Verify Your Email Address - doTheThing`;
+      headerContext = 'Registration Verification';
+      title = 'Verify Your Email Address';
+      contentHtml = `
+        <p style="margin-top: 0; margin-bottom: 14px;">Hello,</p>
+        <p style="margin-top: 0; margin-bottom: 20px;">Thank you for starting your registration with <strong>doTheThing</strong>. Use the verification code below to confirm your email address and continue setting up your account:</p>
+        
+        <table border="0" cellpadding="0" cellspacing="0" style="margin: 20px 0;">
+          <tr>
+            <td style="background-color: #f4f5f7; border: 1.5px dashed #2563eb; padding: 12px 28px; border-radius: 4px;">
+              <span style="font-family: 'Courier New', Courier, monospace; font-size: 28px; font-weight: bold; color: #2563eb; letter-spacing: 0.15em;">${otpCode}</span>
+            </td>
+          </tr>
+        </table>
+        
+        <p style="font-size: 13px; font-weight: 600; color: #de350b; margin-top: 0; margin-bottom: 16px;">This code expires in 5 minutes and is valid for a single use.</p>
+        <p style="margin-top: 0; margin-bottom: 0; color: #5e6c84; font-size: 13px;">If you did not initiate this registration, you can safely ignore this email.</p>
+      `;
+      text = `Hello,\n\nThank you for starting your registration with doTheThing. Your verification code is: ${otpCode}\n\nThis code expires in 5 minutes.\n\nIf you did not initiate this, please ignore this email.`;
+      break;
+    }
+
     case 'WELCOME': {
       subject = 'Welcome to doTheThing! 🚀';
       headerContext = 'Welcome';

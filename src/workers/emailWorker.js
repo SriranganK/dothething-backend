@@ -1,6 +1,5 @@
-const { Worker } = require('bullmq');
+const agenda = require('../config/agenda');
 const nodemailer = require('nodemailer');
-const { connection } = require('../config/queue');
 const Notification = require('../models/Notification');
 const NotificationDelivery = require('../models/NotificationDelivery');
 const User = require('../models/User');
@@ -88,24 +87,31 @@ const processEmailJob = async (deliveryId, notificationId) => {
   }
 };
 
-const emailWorker = new Worker('email-queue', async (job) => {
-  const { deliveryId, notificationId } = job.data;
-  console.log(`Processing email job ${job.id} for delivery ${deliveryId}`);
-  await processEmailJob(deliveryId, notificationId);
-}, { connection });
-
-emailWorker.on('failed', async (job, err) => {
-  console.error(`Email job ${job?.id} failed permanently:`, err.message);
-  if (job) {
-    const { deliveryId } = job.data;
-    await NotificationDelivery.findByIdAndUpdate(deliveryId, {
-      status: 'FAILED',
-      errorMessage: `Failed after all retries: ${err.message}`
-    });
+agenda.define('email-delivery', async (job) => {
+  const { deliveryId, notificationId } = job.attrs.data;
+  console.log(`Processing email job for delivery ${deliveryId}`);
+  try {
+    await processEmailJob(deliveryId, notificationId);
+  } catch (err) {
+    const attempts = job.attrs.failCount || 0;
+    if (attempts < 3) {
+      job.fail(err);
+      // Exponential backoff retry: 5, 10, 20 seconds
+      const delay = 5000 * Math.pow(2, attempts);
+      job.schedule(new Date(Date.now() + delay));
+      await job.save();
+    } else {
+      job.fail(`Failed after 3 attempts: ${err.message}`);
+      await job.save();
+      await NotificationDelivery.findByIdAndUpdate(deliveryId, {
+        status: 'FAILED',
+        errorMessage: `Failed after all retries: ${err.message}`
+      });
+    }
+    throw err;
   }
 });
 
 module.exports = {
-  worker: emailWorker,
   processEmailJob
 };

@@ -1,5 +1,4 @@
-const { Worker } = require('bullmq');
-const { connection } = require('../config/queue');
+const agenda = require('../config/agenda');
 const Notification = require('../models/Notification');
 const NotificationDelivery = require('../models/NotificationDelivery');
 const NotificationPreference = require('../models/NotificationPreference');
@@ -61,13 +60,12 @@ const processNotificationJob = async (deliveryId, notificationId) => {
   }
 };
 
-const notificationWorker = new Worker('notification-queue', async (job) => {
-  const { deliveryId, notificationId } = job.data;
-  console.log(`Processing in-app job ${job.id} for delivery ${deliveryId}`);
+agenda.define('in-app-delivery', async (job) => {
+  const { deliveryId, notificationId } = job.attrs.data;
+  console.log(`Processing in-app job for delivery ${deliveryId}`);
   await processNotificationJob(deliveryId, notificationId);
-}, { connection });
+});
 
 module.exports = {
-  worker: notificationWorker,
   processNotificationJob
 };

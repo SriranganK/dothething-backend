@@ -7,10 +7,29 @@ const authService = require('../services/authService');
  */
 const register = async (req, res) => {
   try {
-    const { name, email, password, designation, company, phone, department, location, timezone, status } = req.body;
+    const { name, email, password, designation, company, phone, department, location, timezone, status, registrationToken } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ message: 'Please provide name, email, and password' });
+    }
+
+    if (!registrationToken) {
+      return res.status(400).json({ message: 'Email verification is required. Please verify your email first.' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+
+    // Verify JWT registrationToken
+    const jwt = require('jsonwebtoken');
+    let decoded;
+    try {
+      decoded = jwt.verify(registrationToken, process.env.JWT_SECRET);
+    } catch (err) {
+      return res.status(400).json({ message: 'Invalid or expired email verification token. Please verify your email again.' });
+    }
+
+    if (!decoded || decoded.purpose !== 'registration-verification' || decoded.email !== cleanEmail) {
+      return res.status(400).json({ message: 'Invalid registration verification token.' });
     }
 
     const hasMinLength = password.length >= 8;
@@ -27,7 +46,7 @@ const register = async (req, res) => {
 
     const data = await authService.registerUser({
       name,
-      email,
+      email: cleanEmail,
       password,
       designation,
       company,
@@ -286,6 +305,93 @@ const checkInvitation = async (req, res) => {
   }
 };
 
+const sendRegistrationOTP = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: 'Please provide an email address' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    
+    // Check if user already exists
+    const User = require('../models/User');
+    const userExists = await User.findOne({ email: cleanEmail });
+    if (userExists) {
+      return res.status(400).json({ message: 'A user with this email address already exists.' });
+    }
+
+    // Generate a secure 6-digit OTP code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+    const OTP = require('../models/OTP');
+    // Save OTP to DB
+    await OTP.create({
+      email: cleanEmail,
+      code,
+      expiresAt
+    });
+
+    // Send email via email service
+    const { sendRegistrationOTPEmail } = require('../services/emailService');
+    await sendRegistrationOTPEmail(cleanEmail, code);
+
+    res.status(200).json({
+      success: true,
+      message: 'A 6-digit verification code has been sent to your email address.'
+    });
+  } catch (error) {
+    console.error('Send registration OTP error:', error.message);
+    res.status(500).json({ message: 'An error occurred while generating the verification code.' });
+  }
+};
+
+const verifyRegistrationOTP = async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) {
+      return res.status(400).json({ message: 'Please provide email and verification code' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const OTP = require('../models/OTP');
+
+    // Find the latest unused, unexpired OTP for this email
+    const otpRecord = await OTP.findOne({
+      email: cleanEmail,
+      code: code.trim(),
+      used: false,
+      expiresAt: { $gt: new Date() }
+    });
+
+    if (!otpRecord) {
+      return res.status(400).json({ message: 'Invalid or expired verification code' });
+    }
+
+    // Mark the OTP as used immediately (single-use)
+    otpRecord.used = true;
+    await otpRecord.save();
+
+    // Generate a secure verification token signed with JWT secret, valid for 30 minutes
+    const jwt = require('jsonwebtoken');
+    const registrationToken = jwt.sign(
+      { email: cleanEmail, purpose: 'registration-verification' },
+      process.env.JWT_SECRET,
+      { expiresIn: '30m' }
+    );
+
+    res.status(200).json({
+      success: true,
+      registrationToken,
+      message: 'Email successfully verified'
+    });
+  } catch (error) {
+    console.error('Verify registration OTP error:', error.message);
+    res.status(500).json({ message: 'An error occurred during verification.' });
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -297,4 +403,6 @@ module.exports = {
   verifyOTP,
   resetPassword,
   checkInvitation,
+  sendRegistrationOTP,
+  verifyRegistrationOTP,
 };
