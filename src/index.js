@@ -82,7 +82,7 @@ app.use('/api/search', searchRoutes);
 app.use('/api/expense-calc', expenseCalcRoutes);
 
 // Serve static assets from frontend build
-const frontendBuildPath = process.env.FRONTEND_BUILD_PATH || path.join(__dirname, './dotheThing/dist');
+const frontendBuildPath = process.env.FRONTEND_BUILD_PATH || path.join(__dirname, '../dotheThing/dist');
 app.use(express.static(frontendBuildPath));
 
 // Wildcard routing fallback for SPA (React Router)
