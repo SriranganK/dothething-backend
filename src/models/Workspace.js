@@ -40,6 +40,26 @@ const workspaceSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  integrations: {
+    github: {
+      connected: { type: Boolean, default: false },
+      accessToken: { type: String },
+      enabled: { type: Boolean, default: false },
+      username: { type: String },
+      avatarUrl: { type: String },
+      profileUrl: { type: String },
+      linkedRepos: { type: [String], default: [] }
+    },
+    gitlab: {
+      connected: { type: Boolean, default: false },
+      accessToken: { type: String },
+      enabled: { type: Boolean, default: false },
+      username: { type: String },
+      avatarUrl: { type: String },
+      profileUrl: { type: String },
+      linkedRepos: { type: [String], default: [] }
+    }
+  },
   createdAt: {
     type: Date,
     default: Date.now,

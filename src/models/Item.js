@@ -75,10 +75,10 @@ const itemSchema = new mongoose.Schema({
     default: null,
     index: true,
   },
-  attachments: {
-    type: [String],
-    default: [],
-  },
+  attachments: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Attachment',
+  }],
   checklist: {
     type: [checklistItemSchema],
     default: [],
@@ -86,6 +86,18 @@ const itemSchema = new mongoose.Schema({
   comments: {
     type: [commentSchema],
     default: [],
+  },
+  linkedRepo: {
+    type: String,
+    default: '',
+  },
+  githubBranchName: {
+    type: String,
+    default: '',
+  },
+  gitlabBranchName: {
+    type: String,
+    default: '',
   },
   order: {
     type: Number,

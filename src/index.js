@@ -20,6 +20,9 @@ const savedViewRoutes = require('./routes/savedViewRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const searchRoutes = require('./routes/searchRoutes');
 const expenseCalcRoutes = require('./routes/expenseCalcRoutes');
+const attachmentRoutes = require('./routes/attachmentRoutes');
+const integrationRoutes = require('./routes/integrationRoutes');
+const aiRoutes = require('./routes/aiRoutes');
 
 const SocketService = require('./services/SocketService');
 
@@ -80,6 +83,12 @@ app.use('/api/saved-views', savedViewRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/expense-calc', expenseCalcRoutes);
+app.use('/api/attachments', attachmentRoutes);
+app.use('/api/integrations', integrationRoutes);
+app.use('/api/ai', aiRoutes);
+
+// Serve uploaded files locally in development mock mode
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Serve static assets from frontend build
 const frontendBuildPath = process.env.FRONTEND_BUILD_PATH || path.join(__dirname, '../../dothething/dist');

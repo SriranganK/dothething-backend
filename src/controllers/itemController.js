@@ -5,7 +5,7 @@ const Label = require('../models/Label');
 const Milestone = require('../models/Milestone');
 const Board = require('../models/Board');
 
-// Helper to enrich item details (labels and milestone)
+// Helper to enrich item details (labels, milestone, and attachments)
 const enrichItemWithDetails = async (item) => {
   const itemObj = item.toObject ? item.toObject() : item;
   
@@ -28,6 +28,52 @@ const enrichItemWithDetails = async (item) => {
   } else {
     itemObj.milestone = null;
   }
+
+  // 3. Fetch attachment details
+  const Attachment = require('../models/Attachment');
+  const dbAttachments = await Attachment.find({ issueId: item._id }).sort({ createdAt: -1 });
+
+  const populatedAttachments = [];
+  
+  // Support legacy string attachments for backward compatibility
+  const rawAttachments = item.attachments || [];
+  for (const rawAtt of rawAttachments) {
+    if (typeof rawAtt === 'string') {
+      const isUrl = rawAtt.startsWith('http://') || rawAtt.startsWith('https://');
+      populatedAttachments.push({
+        _id: rawAtt,
+        id: rawAtt,
+        issueId: item._id.toString(),
+        type: isUrl ? 'link' : 'file',
+        fileName: rawAtt.split('/').pop() || rawAtt,
+        originalName: rawAtt.split('/').pop() || rawAtt,
+        publicUrl: rawAtt,
+        createdAt: item.createdAt || new Date(),
+        updatedAt: item.createdAt || new Date()
+      });
+    }
+  }
+
+  // Add DB rich attachments
+  dbAttachments.forEach(att => {
+    populatedAttachments.push({
+      _id: att._id,
+      id: att._id.toString(),
+      issueId: att.issueId.toString(),
+      type: att.type,
+      fileName: att.fileName,
+      originalName: att.originalName,
+      mimeType: att.mimeType,
+      size: att.size,
+      storageKey: att.storageKey,
+      publicUrl: att.publicUrl,
+      uploadedBy: att.uploadedBy,
+      createdAt: att.createdAt,
+      updatedAt: att.updatedAt
+    });
+  });
+
+  itemObj.attachments = populatedAttachments;
 
   return itemObj;
 };
@@ -226,7 +272,11 @@ const updateItem = async (req, res) => {
 
     fieldsToUpdate.forEach(field => {
       if (req.body[field] !== undefined) {
-        item[field] = req.body[field];
+        if (field === 'attachments') {
+          item[field] = req.body[field].map(x => (x && typeof x === 'object') ? (x._id || x.id) : x);
+        } else {
+          item[field] = req.body[field];
+        }
       }
     });
 
@@ -419,9 +469,10 @@ const updateItem = async (req, res) => {
     }
 
     if (req.body.attachments !== undefined) {
-      const newAttachments = req.body.attachments || [];
-      const added = newAttachments.filter(x => !oldAttachments.includes(x));
-      const removed = oldAttachments.filter(x => !newAttachments.includes(x));
+      const oldAttStrings = oldAttachments.map(x => x.toString());
+      const newAttachments = (req.body.attachments || []).map(x => (x && typeof x === 'object') ? (x._id || x.id || '').toString() : x.toString());
+      const added = newAttachments.filter(x => !oldAttStrings.includes(x));
+      const removed = oldAttStrings.filter(x => !newAttachments.includes(x));
 
       for (const att of added) {
         await ActivityService.log({

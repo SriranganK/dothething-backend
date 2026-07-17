@@ -27,4 +27,15 @@ router.post('/forgot-password', forgotPasswordLimiter, forgotPassword);
 router.post('/verify-otp', verifyOTPLimiter, verifyOTP);
 router.post('/reset-password', resetPasswordLimiter, resetPassword);
 
+// OAuth Callbacks
+const { handleCallback } = require('../controllers/integrationController');
+router.get('/github/callback', (req, res, next) => {
+  req.params.platform = 'github';
+  handleCallback(req, res, next);
+});
+router.get('/gitlab/callback', (req, res, next) => {
+  req.params.platform = 'gitlab';
+  handleCallback(req, res, next);
+});
+
 module.exports = router;
