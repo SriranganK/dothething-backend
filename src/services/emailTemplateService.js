@@ -103,6 +103,7 @@ const buildCtaHtml = (text, url) => {
  * @returns {Object} { subject, html, text }
  */
 const renderEmail = (type, data = {}) => {
+  const FRONTEND_URL = process.env.FRONTEND_URL || 'http://8.235.44.47:5000';
   let subject = '';
   let headerContext = '';
   let title = '';
@@ -125,7 +126,7 @@ const renderEmail = (type, data = {}) => {
         <p style="margin-top: 0; margin-bottom: 14px;">Collaborate on tasks, manage boards, and track milestones with the rest of the team.</p>
         <p style="margin-top: 0; margin-bottom: 0;">If you don't have an account, please sign up using your email: <strong>${toEmail}</strong>.</p>
       `;
-      const inviteUrl = `http://localhost:5173/register?email=${encodeURIComponent(toEmail)}`;
+      const inviteUrl = `${FRONTEND_URL}/register?email=${encodeURIComponent(toEmail)}`;
       ctaHtml = buildCtaHtml('Join Workspace', inviteUrl);
       text = `Hi,\n\n${inviterName || 'A team member'} has invited you to join their workspace "${workspaceName}" on doTheThing.\n\nJoin the workspace at: ${inviteUrl}\n\nBest regards,\nThe doTheThing Team`;
       break;
@@ -212,8 +213,8 @@ const renderEmail = (type, data = {}) => {
         
         <p style="margin-top: 0; margin-bottom: 0;">Click below to launch your workspace and get started immediately:</p>
       `;
-      ctaHtml = buildCtaHtml('Launch Workspace', 'http://localhost:5173');
-      text = `Welcome to doTheThing, ${recipientName}!\n\nOrganize projects, collaborate with your team, and get more done every day.\n\nLaunch your workspace at: http://localhost:5173`;
+      ctaHtml = buildCtaHtml('Launch Workspace', FRONTEND_URL);
+      text = `Welcome to doTheThing, ${recipientName}!\n\nOrganize projects, collaborate with your team, and get more done every day.\n\nLaunch your workspace at: ${FRONTEND_URL}`;
       break;
     }
 
@@ -238,9 +239,9 @@ const renderEmail = (type, data = {}) => {
         </div>
       `;
       if (entityId) {
-        ctaHtml = buildCtaHtml('Open Task Details', `http://localhost:5173/item/${entityId}`);
+        ctaHtml = buildCtaHtml('Open Task Details', `${FRONTEND_URL}/item/${entityId}`);
       }
-      text = `Hi ${recipientName},\n\nYou were mentioned in a comment:\n"${cleanComment}"\n\nView details: http://localhost:5173/item/${entityId}`;
+      text = `Hi ${recipientName},\n\nYou were mentioned in a comment:\n"${cleanComment}"\n\nView details: ${FRONTEND_URL}/item/${entityId}`;
       break;
     }
 
@@ -268,9 +269,9 @@ const renderEmail = (type, data = {}) => {
         </table>
       `;
       if (entityId) {
-        ctaHtml = buildCtaHtml('Open Task Details', `http://localhost:5173/item/${entityId}`);
+        ctaHtml = buildCtaHtml('Open Task Details', `${FRONTEND_URL}/item/${entityId}`);
       }
-      text = `Hi ${recipientName},\n\nYou have been assigned the task: "${taskTitle}"\nDue date: ${formattedDate}\n\nView task: http://localhost:5173/item/${entityId}`;
+      text = `Hi ${recipientName},\n\nYou have been assigned the task: "${taskTitle}"\nDue date: ${formattedDate}\n\nView task: ${FRONTEND_URL}/item/${entityId}`;
       break;
     }
 
@@ -294,9 +295,9 @@ const renderEmail = (type, data = {}) => {
         </div>
       `;
       if (entityId) {
-        ctaHtml = buildCtaHtml(isOverdue ? 'View Overdue Task' : 'View Task Details', `http://localhost:5173/item/${entityId}`);
+        ctaHtml = buildCtaHtml(isOverdue ? 'View Overdue Task' : 'View Task Details', `${FRONTEND_URL}/item/${entityId}`);
       }
-      text = `Hi ${recipientName},\n\nDeadline reminder for: "${taskTitle}"\nDue Date: ${formattedDate}\nDetails: ${message}\n\nView details: http://localhost:5173/item/${entityId}`;
+      text = `Hi ${recipientName},\n\nDeadline reminder for: "${taskTitle}"\nDue Date: ${formattedDate}\nDetails: ${message}\n\nView details: ${FRONTEND_URL}/item/${entityId}`;
       break;
     }
 
@@ -313,8 +314,8 @@ const renderEmail = (type, data = {}) => {
           ${message}
         </div>
       `;
-      ctaHtml = buildCtaHtml('Open Workspace', 'http://localhost:5173');
-      text = `Hi ${recipientName},\n\nA new announcement was posted: "${annTitle}"\n\n"${message}"\n\nOpen Workspace: http://localhost:5173`;
+      ctaHtml = buildCtaHtml('Open Workspace', FRONTEND_URL);
+      text = `Hi ${recipientName},\n\nA new announcement was posted: "${annTitle}"\n\n"${message}"\n\nOpen Workspace: ${FRONTEND_URL}`;
       break;
     }
 
@@ -348,8 +349,8 @@ const renderEmail = (type, data = {}) => {
         
         <p style="margin-top: 0; margin-bottom: 0;">Keep up the great work! Adjust your task timelines or collaborate with teammates to clear pending items.</p>
       `;
-      ctaHtml = buildCtaHtml('Open Workspace', 'http://localhost:5173');
-      text = `Hi ${recipientName},\n\nHere is your weekly doTheThing summary:\n- Total Assigned: ${assignedCount}\n- Completed: ${completedCount}\n- Pending: ${pendingCount}\n\nOpen Workspace: http://localhost:5173`;
+      ctaHtml = buildCtaHtml('Open Workspace', FRONTEND_URL);
+      text = `Hi ${recipientName},\n\nHere is your weekly doTheThing summary:\n- Total Assigned: ${assignedCount}\n- Completed: ${completedCount}\n- Pending: ${pendingCount}\n\nOpen Workspace: ${FRONTEND_URL}`;
       break;
     }
 
@@ -366,8 +367,8 @@ const renderEmail = (type, data = {}) => {
           ${message}
         </div>
       `;
-      ctaHtml = buildCtaHtml('View Workspace', 'http://localhost:5173');
-      text = `Hi ${recipientName},\n\nMilestone Alert: ${mTitle}\n\n${message}\n\nView Workspace: http://localhost:5173`;
+      ctaHtml = buildCtaHtml('View Workspace', FRONTEND_URL);
+      text = `Hi ${recipientName},\n\nMilestone Alert: ${mTitle}\n\n${message}\n\nView Workspace: ${FRONTEND_URL}`;
       break;
     }
 
@@ -426,7 +427,7 @@ const renderEmail = (type, data = {}) => {
           Please log in to your account using your email address <strong>${toEmail}</strong> to accept the invite.
         </p>
       `;
-      const inviteUrl = `http://localhost:5173/?tab=expense-calculator`;
+      const inviteUrl = `${FRONTEND_URL}/?tab=expense-calculator`;
       ctaHtml = buildCtaHtml('Accept Invitation', inviteUrl);
       text = `Hi,\n\n${inviterName} has invited you to join the Expense Calculator Board "${boardName}" (${boardType || 'monthly'}).\n\nAccept the invitation at: ${inviteUrl}\n\nBest,\nThe doTheThing Team`;
       break;
@@ -441,8 +442,8 @@ const renderEmail = (type, data = {}) => {
         <p style="margin-top: 0; margin-bottom: 14px;">Hi <strong>${recipientName}</strong>,</p>
         <p style="margin-top: 0; margin-bottom: 16px;">${message || 'You have a new update in your doTheThing account.'}</p>
       `;
-      ctaHtml = buildCtaHtml('View App', 'http://localhost:5173');
-      text = `Hi ${recipientName},\n\nUpdate: ${dTitle}\n\n${message}\n\nView details: http://localhost:5173`;
+      ctaHtml = buildCtaHtml('View App', FRONTEND_URL);
+      text = `Hi ${recipientName},\n\nUpdate: ${dTitle}\n\n${message}\n\nView details: ${FRONTEND_URL}`;
       break;
     }
   }
