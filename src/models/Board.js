@@ -35,6 +35,12 @@ const boardSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
   },
+  sourceDocuments: [
+    {
+      fileName: { type: String, required: true },
+      uploadedAt: { type: Date, default: Date.now }
+    }
+  ],
   createdAt: {
     type: Date,
     default: Date.now,

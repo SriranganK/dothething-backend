@@ -224,31 +224,46 @@ Rules:
   return parseJSONResponse(response);
 }
 
-/**
- * Contextual chat assistant responding to questions based on board details and tasks.
- */
 async function boardChat(boardName, columns, tasks, message) {
   const systemPrompt = `You are DoTheThing Assistant, an intelligent AI project coordinator.
 Answer the user's message/question about their board.
+You can perform actions on tasks like changing status (moving columns), assigning tasks to team members, changing priority, adding due date, and adding/removing labels.
+If the user requests you to change, assign, update, move, or modify a task, you MUST perform the action by adding it to the "actions" array in the JSON response.
 You MUST respond with a single valid JSON object matching this structure EXACTLY:
 {
-  "reply": "Your response message formatted in Markdown."
+  "reply": "Your response message formatted in Markdown.",
+  "actions": [
+    {
+      "type": "update_task",
+      "taskTitle": "The exact title of the task to search and update",
+      "updates": {
+        "columnId": "progress", // matching column name (like 'todo', 'in progress', 'done') or specific column id
+        "assignee": "alice@example.com", // member name or email to assign, or null to unassign
+        "priority": "High", // 'Lowest' | 'Low' | 'Medium' | 'High' | 'Highest' | 'Critical'
+        "dueDate": "2026-08-16T00:00:00.000Z", // ISO date string or null to remove
+        "labels": ["Bug", "Frontend"] // list of label names to attach
+      }
+    }
+  ]
 }
 Rules:
-- Leverage the board context (name, columns, tasks) provided below to give realistic, helpful answers.
-- Identify blockers, progress rates, or high-priority items where helpful. Keep response concise and professional.
+- If the user did not request any updates or changes, set the "actions" field to an empty array [].
+- Identify the tasks correctly. Match by title from the tasks list.
+- Keep the markdown "reply" friendly, stating what action you are performing.
 - Respond ONLY with the JSON object. Do not include markdown wraps or extra explanations.`;
 
   const contextData = {
     boardName,
     columns: columns.map(c => ({ id: c.id, name: c.name })),
     tasks: tasks.map(t => ({
+      id: t._id,
       title: t.title,
       columnId: t.columnId,
       priority: t.priority,
       type: t.type,
       assignee: t.assignee || 'Unassigned',
-      dueDate: t.dueDate
+      dueDate: t.dueDate,
+      labels: t.labels || []
     }))
   };
 
@@ -284,6 +299,162 @@ Rules:
   return parseJSONResponse(response);
 }
 
+/**
+ * Analyzes a requirements document and returns a high-level project plan summary.
+ */
+async function analyzeDocumentForNewBoard(documentText) {
+  const systemPrompt = `You are an expert project manager. Analyze the uploaded project requirements document.
+Extract the following information and output it in the exact JSON format:
+{
+  "projectName": "Extracted project name (or a descriptive name based on the document if missing)",
+  "description": "High-level goal and description of the product or feature",
+  "features": ["Feature 1 / Epic 1", "Feature 2 / Epic 2"],
+  "teamMembers": [
+    { "name": "Name of developer/team member mentioned", "role": "Their role (e.g. Frontend Developer, Backend Developer, QA, Designer) or empty if not clear" }
+  ],
+  "potentialTasks": [
+    { "title": "Task title/step", "description": "Concisely explain what this task accomplishes and what the steps are." }
+  ],
+  "prdMarkdown": "Detailed, professional Markdown-formatted PRD containing: Problem Statement, Goals & Non-goals, Target Users & Personas, Key User Stories (formatted as list/table), Functional Requirements (with checkmarks), Privacy & Security, Technical Architecture, Success Metrics, and Roadmap & Milestones. Keep this complete, structured, and organized, without truncation. Use clean Markdown syntax.",
+  "initialQuestions": ["1 or 2 critical follow-up questions if details are missing, ambiguous, or if there is no clear owner for a task. Keep them concise."]
+}
+Rules:
+- Respond with a single valid JSON object. Do not wrap in markdown block, code block, or include extra text.
+- If no team members are detected, return empty array.
+- If everything is perfectly clear and no questions are needed, return empty array for initialQuestions.`;
+
+  const userPrompt = `Document Content:\n\n${documentText.slice(0, 50000)}`;
+  const response = await getAICompletion(systemPrompt, userPrompt, true);
+  return parseJSONResponse(response);
+}
+
+/**
+ * Analyzes a requirements document and compares it to an existing board's tasks.
+ */
+async function analyzeDocumentForExistingBoard(documentText, existingTasks) {
+  const systemPrompt = `You are an expert project manager. You are updating an existing project board.
+We have an uploaded requirements document and a list of existing tasks on the board.
+Analyze the document and compare it to the existing tasks to find:
+1. New tasks that need to be created.
+2. Existing tasks that need updates (e.g. details, assignee, priority change).
+3. Potential duplicates (tasks in the document that already exist on the board, so they should be ignored).
+Output in the exact JSON format:
+{
+  "projectName": "Name of the board",
+  "newTasks": ["Brief description of new task to be added"],
+  "updates": ["Describe the change needed to existing task, e.g. 'Task X should be assigned to Sarah instead of John'"],
+  "duplicates": ["Identify duplicate, e.g. 'Implement login is already present on the board'"],
+  "prdMarkdown": "Detailed, professional Markdown-formatted PRD log containing: Problem Statement, Goals & Non-goals, Target Users & Personas, Key User Stories (formatted as list/table), Functional Requirements (with checkmarks), Privacy & Security, Technical Architecture, Success Metrics, and Roadmap & Milestones. Keep this complete, structured, and organized, without truncation. Use clean Markdown syntax.",
+  "initialQuestions": ["1 or 2 critical follow-up questions to resolve conflicting or ambiguous requirements. Keep them concise."]
+}
+Rules:
+- Respond with a single valid JSON object. Do not wrap in markdown block or code block.
+- Existing tasks on the board are: ${JSON.stringify(existingTasks.map(t => ({ id: t._id, title: t.title, assignee: t.assignee, priority: t.priority, status: t.columnId })))}`;
+
+  const userPrompt = `Document Content:\n\n${documentText.slice(0, 50000)}`;
+  const response = await getAICompletion(systemPrompt, userPrompt, true);
+  return parseJSONResponse(response);
+}
+
+/**
+ * Generates the final board configuration and task preview list.
+ */
+async function generateBoardPreview(documentText, comments, questionsAnswers, existingBoardContext = null) {
+  const systemPrompt = `You are an expert Scrum Master / Project Manager.
+Create a complete board and task preview based on:
+1. The original document text.
+2. The discussion context (user comments and questions/answers).
+3. The existing board tasks and columns (if we are updating an existing board).
+
+You MUST output a single valid JSON object matching this structure EXACTLY:
+{
+  "boardName": "Name of the board",
+  "description": "Description of the board",
+  "columns": [
+    { "id": "todo", "name": "To Do", "order": 0, "isDone": false },
+    { "id": "progress", "name": "In Progress", "order": 1, "isDone": false },
+    { "id": "done", "name": "Done", "order": 2, "isDone": true }
+  ],
+  "tasks": [
+    {
+      "title": "Task title",
+      "description": "Fleshed-out detailed task description in markdown.",
+      "columnId": "todo",
+      "type": "Task",
+      "priority": "Medium",
+      "assignee": "Suggested developer name (e.g., Sarah, John) or leave empty if not clear",
+      "source": "Specific section in the original document this task traces to (e.g., 'PRD Section 3.2')",
+      "isNew": true,
+      "existingTaskId": "If this is an update to an existing task, specify its _id, otherwise leave empty"
+    }
+  ],
+  "nextQuestion": "If you still find a critical requirement ambiguous, ask ONE clear question. Otherwise, leave empty if preview is complete."
+}
+Rules:
+- Columns: Create 3 to 5 logical columns. If updating an existing board, reuse the existing board columns: ${existingBoardContext ? JSON.stringify(existingBoardContext.columns) : '[]'}.
+- Tasks: Create highly actionable tasks. For existing board, flag updates to existing tasks with isNew=false and specify the existingTaskId.
+- 'type' must be: 'Task' | 'Bug' | 'Lead' | 'Idea' | 'Issue' | 'Event' | 'Feature' | 'Research' | 'Documentation'.
+- 'priority' must be: 'Lowest' | 'Low' | 'Medium' | 'High' | 'Highest' | 'Critical'.
+- 'assignee': Must map to one of the available workspace member names: ${existingBoardContext ? JSON.stringify(existingBoardContext.memberNames) : '[]'}. If not a direct match, try matching by first name, or leave empty if there's no clear member.
+- Trace every task back to the source document section in 'source' (e.g. 'PRD Section 1.1').
+- Respond ONLY with the JSON object. Do not wrap in markdown.`;
+
+  const discussionStr = `Conversation history:\n${comments.map(c => `${c.role}: ${c.text}`).join('\n')}\n\nQuestions & Answers:\n${questionsAnswers.map(q => `Q: ${q.questionText}\nA: ${q.answerText}`).join('\n')}`;
+
+  const userPrompt = `Document Content:\n\n${documentText.slice(0, 50000)}\n\n${discussionStr}`;
+  const response = await getAICompletion(systemPrompt, userPrompt, true);
+  return parseJSONResponse(response);
+}
+
+async function workspaceChat(workspaceName, boards, tasks, message) {
+  const systemPrompt = `You are DoTheThing Assistant, an intelligent AI workspace coordinator.
+Answer the user's message/question about their workspace dashboard, projects, and tasks.
+You can perform actions on tasks like changing status (moving columns), assigning tasks to team members, changing priority, adding due date, and adding/removing labels.
+If the user requests you to change, assign, update, move, or modify a task, you MUST perform the action by adding it to the "actions" array in the JSON response.
+You MUST respond with a single valid JSON object matching this structure EXACTLY:
+{
+  "reply": "Your response message formatted in Markdown.",
+  "actions": [
+    {
+      "type": "update_task",
+      "taskTitle": "The exact title of the task to search and update",
+      "updates": {
+        "columnId": "progress", // matching column name (like 'todo', 'in progress', 'done') or specific column id
+        "assignee": "alice@example.com", // member name or email to assign, or null to unassign
+        "priority": "High", // 'Lowest' | 'Low' | 'Medium' | 'High' | 'Highest' | 'Critical'
+        "dueDate": "2026-08-16T00:00:00.000Z", // ISO date string or null to remove
+        "labels": ["Bug", "Frontend"] // list of label names to attach
+      }
+    }
+  ]
+}
+Rules:
+- If the user did not request any updates or changes, set the "actions" field to an empty array [].
+- Identify the tasks correctly. Match by title from the tasks list.
+- Keep the markdown "reply" friendly, stating what action you are performing.
+- Respond ONLY with the JSON object. Do not include markdown wraps or extra explanations.`;
+
+  const contextData = {
+    workspaceName,
+    boards: boards.map(b => ({ id: b._id, name: b.name })),
+    tasks: tasks.map(t => ({
+      id: t._id,
+      title: t.title,
+      boardId: t.board,
+      columnId: t.columnId,
+      priority: t.priority,
+      type: t.type,
+      assignee: t.assignee || 'Unassigned',
+      dueDate: t.dueDate,
+      labels: t.labels || []
+    }))
+  };
+
+  const userPrompt = `Workspace Context: ${JSON.stringify(contextData)}\n\nUser Question/Message: ${message}`;
+  const response = await getAICompletion(systemPrompt, userPrompt, true);
+  return parseJSONResponse(response);
+}
+
 module.exports = {
   generateBoard,
   generateColumns,
@@ -291,5 +462,9 @@ module.exports = {
   breakTask,
   rewriteDescription,
   boardChat,
-  generateTask
+  workspaceChat,
+  generateTask,
+  analyzeDocumentForNewBoard,
+  analyzeDocumentForExistingBoard,
+  generateBoardPreview
 };

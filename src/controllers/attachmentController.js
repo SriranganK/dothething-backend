@@ -98,14 +98,31 @@ const uploadLocalFile = async (req, res) => {
     const destPath = path.join(uploadsDir, safeFilename);
 
     const writeStream = fs.createWriteStream(destPath);
+    
+    writeStream.on('error', (err) => {
+      console.error('[Attachment Controller] Local file write error:', err);
+      if (fs.existsSync(destPath)) {
+        try { fs.unlinkSync(destPath); } catch (e) {}
+      }
+      if (!res.headersSent) {
+        res.status(500).json({ message: 'Error writing file to disk: ' + err.message });
+      }
+    });
+
     req.pipe(writeStream);
 
-    req.on('end', () => {
+    writeStream.on('finish', () => {
       res.status(200).json({ success: true, message: 'Local upload complete' });
     });
 
     req.on('error', (err) => {
-      res.status(500).json({ message: err.message });
+      console.error('[Attachment Controller] Request stream error:', err);
+      if (fs.existsSync(destPath)) {
+        try { fs.unlinkSync(destPath); } catch (e) {}
+      }
+      if (!res.headersSent) {
+        res.status(500).json({ message: err.message });
+      }
     });
   } catch (error) {
     console.error('Local mock upload error:', error);
