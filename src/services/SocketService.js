@@ -63,6 +63,21 @@ const init = (socketIoInstance) => {
       }
     });
 
+    // Join and leave rooms for real-time scratch page updates sync
+    socket.on('scratch:join', (pageId) => {
+      if (pageId) {
+        socket.join(`scratch:${pageId}`);
+        console.log(`Socket ${socket.id} (User: ${userId}) joined room: scratch:${pageId}`);
+      }
+    });
+
+    socket.on('scratch:leave', (pageId) => {
+      if (pageId) {
+        socket.leave(`scratch:${pageId}`);
+        console.log(`Socket ${socket.id} (User: ${userId}) left room: scratch:${pageId}`);
+      }
+    });
+
     socket.on('disconnect', () => {
       console.log(`Socket disconnected: ${socket.id} (User: ${userId})`);
       if (userSockets.has(userId)) {
@@ -105,6 +120,11 @@ const broadcastToWorkspace = (workspaceId, event, data) => {
   io.to(`workspace:${workspaceId}`).emit(event, data);
 };
 
+const broadcastToScratchPage = (pageId, event, data) => {
+  if (!io) return;
+  io.to(`scratch:${pageId}`).emit(event, data);
+};
+
 const getIo = () => io;
 
 module.exports = {
@@ -113,5 +133,6 @@ module.exports = {
   sendToMultipleUsers,
   broadcastToBoard,
   broadcastToWorkspace,
+  broadcastToScratchPage,
   getIo
 };

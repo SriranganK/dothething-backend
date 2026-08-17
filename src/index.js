@@ -23,6 +23,7 @@ const expenseCalcRoutes = require('./routes/expenseCalcRoutes');
 const attachmentRoutes = require('./routes/attachmentRoutes');
 const integrationRoutes = require('./routes/integrationRoutes');
 const aiRoutes = require('./routes/aiRoutes');
+const scratchRoutes = require('./routes/scratchRoutes');
 
 const SocketService = require('./services/SocketService');
 
@@ -86,6 +87,7 @@ app.use('/api/expense-calc', expenseCalcRoutes);
 app.use('/api/attachments', attachmentRoutes);
 app.use('/api/integrations', integrationRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/scratch', scratchRoutes);
 
 // Serve uploaded files locally in development mock mode
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
