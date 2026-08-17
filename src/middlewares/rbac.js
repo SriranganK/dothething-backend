@@ -185,7 +185,112 @@ const requireItemPermission = (permission) => {
   };
 };
 
+
+/**
+ * Middleware factory: Require permission on a Scratch Page.
+ * @param {string} requiredAction - 'view' | 'edit' | 'comment' | 'manage' | 'delete'
+ */
+const requireScratchPagePermission = (requiredAction = 'view') => {
+  return async (req, res, next) => {
+    try {
+      const pageId = req.params.id || req.params.pageId;
+      if (!pageId) {
+        return res.status(400).json({ message: 'Scratch Page ID is required' });
+      }
+
+      const { canAccessScratchPage } = require('../services/authorizationService');
+      const result = await canAccessScratchPage(req.user._id, pageId, requiredAction);
+
+      if (!result.allowed) {
+        return res.status(403).json({ message: result.reason || 'Access denied to scratch page.' });
+      }
+
+      req.page = result.page;
+      req.pageRole = result.role;
+      next();
+    } catch (error) {
+      console.error('Scratch page permission middleware error:', error.message);
+      return res.status(500).json({ message: 'Authorization check failed' });
+    }
+  };
+};
+
+/**
+ * Middleware factory: Require permission on a Scratch Block by blockId.
+ * @param {string} requiredAction - 'view' | 'edit' | 'delete'
+ */
+const requireScratchBlockPermission = (requiredAction = 'edit') => {
+  return async (req, res, next) => {
+    try {
+      const blockId = req.params.blockId;
+      if (!blockId) {
+        return res.status(400).json({ message: 'Block ID is required' });
+      }
+
+      const ScratchBlock = require('../models/ScratchBlock');
+      const block = await ScratchBlock.findById(blockId);
+      if (!block) {
+        return res.status(404).json({ message: 'Scratch Block not found' });
+      }
+
+      const { canAccessScratchPage } = require('../services/authorizationService');
+      const result = await canAccessScratchPage(req.user._id, block.pageId, requiredAction);
+
+      if (!result.allowed) {
+        return res.status(403).json({ message: result.reason || 'Access denied to scratch block.' });
+      }
+
+      req.block = block;
+      req.page = result.page;
+      req.pageRole = result.role;
+      next();
+    } catch (error) {
+      console.error('Scratch block permission middleware error:', error.message);
+      return res.status(500).json({ message: 'Authorization check failed' });
+    }
+  };
+};
+
+/**
+ * Middleware factory: Require permission on a Scratch Comment by commentId.
+ * @param {string} requiredAction - 'view' | 'comment' | 'delete'
+ */
+const requireScratchCommentPermission = (requiredAction = 'comment') => {
+  return async (req, res, next) => {
+    try {
+      const commentId = req.params.commentId;
+      if (!commentId) {
+        return res.status(400).json({ message: 'Comment ID is required' });
+      }
+
+      const ScratchComment = require('../models/ScratchComment');
+      const comment = await ScratchComment.findById(commentId);
+      if (!comment) {
+        return res.status(404).json({ message: 'Scratch Comment not found' });
+      }
+
+      const { canAccessScratchPage } = require('../services/authorizationService');
+      const result = await canAccessScratchPage(req.user._id, comment.pageId, requiredAction);
+
+      if (!result.allowed) {
+        return res.status(403).json({ message: result.reason || 'Access denied to scratch comment.' });
+      }
+
+      req.comment = comment;
+      req.page = result.page;
+      req.pageRole = result.role;
+      next();
+    } catch (error) {
+      console.error('Scratch comment permission middleware error:', error.message);
+      return res.status(500).json({ message: 'Authorization check failed' });
+    }
+  };
+};
+
 module.exports = {
+  requireScratchPagePermission,
+  requireScratchBlockPermission,
+  requireScratchCommentPermission,
   requireWorkspaceMember,
   requirePermission,
   requireBoardAccess,

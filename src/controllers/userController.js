@@ -124,8 +124,30 @@ const getUserProfile = async (req, res) => {
   }
 };
 
+const searchUsers = async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || typeof q !== 'string') {
+      return res.status(200).json({ users: [] });
+    }
+    const queryRegex = new RegExp(q.trim(), 'i');
+    const users = await User.find({
+      $or: [{ name: queryRegex }, { email: queryRegex }],
+    })
+      .select('name email _id')
+      .limit(10)
+      .lean();
+
+    return res.status(200).json({ users });
+  } catch (error) {
+    console.error('Error searching users:', error);
+    return res.status(500).json({ message: 'Server error searching users' });
+  }
+};
+
 module.exports = {
   updateProfile,
   changePassword,
   getUserProfile,
+  searchUsers,
 };

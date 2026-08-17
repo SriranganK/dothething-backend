@@ -45,6 +45,24 @@ const scratchPageSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    collaborators: [
+      {
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'User',
+          required: true,
+        },
+        role: {
+          type: String,
+          enum: ['editor', 'commenter', 'viewer'],
+          default: 'editor',
+        },
+        addedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
   },
   {
     timestamps: true,

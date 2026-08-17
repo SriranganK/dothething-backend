@@ -11,7 +11,28 @@ const getPages = async (req, res) => {
       return res.status(400).json({ message: 'Workspace ID is required' });
     }
 
-    const pages = await ScratchPage.find({ workspace: workspaceId })
+    const { getWorkspaceRole } = require('../services/authorizationService');
+    const workspaceRole = await getWorkspaceRole(req.user._id, workspaceId);
+    if (!workspaceRole) {
+      return res.status(403).json({ message: 'Access denied. You are not a member of this workspace.' });
+    }
+
+    let filter = {};
+    if (workspaceRole === 'OWNER' || workspaceRole === 'ADMIN') {
+      filter = { workspace: workspaceId };
+    } else {
+      filter = {
+        workspace: workspaceId,
+        $or: [
+          { createdBy: req.user._id },
+          { visibility: 'workspace' },
+          { 'collaborators.user': req.user._id },
+          { visibility: 'public' },
+        ],
+      };
+    }
+
+    const pages = await ScratchPage.find(filter)
       .sort({ order: 1, createdAt: 1 })
       .lean();
 
@@ -60,13 +81,16 @@ const createPage = async (req, res) => {
       .lean();
     const order = maxPage ? maxPage.order + 1 : 0;
 
+    // Default visibility is private unless explicitly workspace
+    const pageVisibility = visibility === 'workspace' ? 'workspace' : 'private';
+
     const page = await ScratchPage.create({
       workspace: workspaceId,
       title: title || 'Untitled',
       icon: icon || '📄',
       cover: cover || '',
       parentPageId: parentPageId || null,
-      visibility: visibility || 'private',
+      visibility: pageVisibility,
       order,
       createdBy: req.user._id,
     });
@@ -609,6 +633,148 @@ const updatePublicBlockByToken = async (req, res) => {
   }
 };
 
+/**
+ * Add / Invite a collaborator by email
+ */
+const addCollaborator = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email, role } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: 'User email is required' });
+    }
+
+    const page = await ScratchPage.findById(id);
+    if (!page) {
+      return res.status(404).json({ message: 'Scratch page not found' });
+    }
+
+    const User = require('../models/User');
+    const userToInvite = await User.findOne({ email: email.trim().toLowerCase() });
+    if (!userToInvite) {
+      return res.status(404).json({ message: 'No registered user found with that email' });
+    }
+
+    if (page.createdBy.toString() === userToInvite._id.toString()) {
+      return res.status(400).json({ message: 'User is the owner of this page' });
+    }
+
+    const existingIndex = page.collaborators.findIndex(
+      (c) => c.user.toString() === userToInvite._id.toString()
+    );
+
+    const assignedRole = role === 'viewer' || role === 'commenter' ? role : 'editor';
+
+    if (existingIndex > -1) {
+      page.collaborators[existingIndex].role = assignedRole;
+    } else {
+      page.collaborators.push({
+        user: userToInvite._id,
+        role: assignedRole,
+      });
+    }
+
+    await page.save();
+
+    const updatedPage = await ScratchPage.findById(id)
+      .populate('collaborators.user', 'name email avatar')
+      .populate('createdBy', 'name email avatar')
+      .lean();
+
+    return res.status(200).json({
+      message: 'Collaborator added successfully',
+      collaborators: updatedPage.collaborators,
+    });
+  } catch (error) {
+    console.error('Error adding collaborator:', error);
+    return res.status(500).json({ message: 'Failed to add collaborator' });
+  }
+};
+
+/**
+ * Get collaborators for a page
+ */
+const getCollaborators = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const page = await ScratchPage.findById(id)
+      .populate('collaborators.user', 'name email avatar')
+      .populate('createdBy', 'name email avatar')
+      .lean();
+
+    if (!page) {
+      return res.status(404).json({ message: 'Scratch page not found' });
+    }
+
+    return res.status(200).json({
+      owner: page.createdBy,
+      collaborators: page.collaborators || [],
+    });
+  } catch (error) {
+    console.error('Error fetching collaborators:', error);
+    return res.status(500).json({ message: 'Failed to fetch collaborators' });
+  }
+};
+
+/**
+ * Update collaborator role
+ */
+const updateCollaboratorRole = async (req, res) => {
+  try {
+    const { id, userId } = req.params;
+    const { role } = req.body;
+
+    const page = await ScratchPage.findById(id);
+    if (!page) {
+      return res.status(404).json({ message: 'Scratch page not found' });
+    }
+
+    const collaborator = page.collaborators.find((c) => c.user.toString() === userId);
+    if (!collaborator) {
+      return res.status(404).json({ message: 'Collaborator not found' });
+    }
+
+    collaborator.role = role === 'viewer' || role === 'commenter' ? role : 'editor';
+    await page.save();
+
+    const updatedPage = await ScratchPage.findById(id)
+      .populate('collaborators.user', 'name email avatar')
+      .lean();
+
+    return res.status(200).json({ collaborators: updatedPage.collaborators });
+  } catch (error) {
+    console.error('Error updating collaborator role:', error);
+    return res.status(500).json({ message: 'Failed to update collaborator role' });
+  }
+};
+
+/**
+ * Remove collaborator
+ */
+const removeCollaborator = async (req, res) => {
+  try {
+    const { id, userId } = req.params;
+
+    const page = await ScratchPage.findById(id);
+    if (!page) {
+      return res.status(404).json({ message: 'Scratch page not found' });
+    }
+
+    page.collaborators = page.collaborators.filter((c) => c.user.toString() !== userId);
+    await page.save();
+
+    const updatedPage = await ScratchPage.findById(id)
+      .populate('collaborators.user', 'name email avatar')
+      .lean();
+
+    return res.status(200).json({ message: 'Collaborator removed', collaborators: updatedPage.collaborators });
+  } catch (error) {
+    console.error('Error removing collaborator:', error);
+    return res.status(500).json({ message: 'Failed to remove collaborator' });
+  }
+};
+
 module.exports = {
   getPages,
   getPageById,
@@ -631,4 +797,8 @@ module.exports = {
   deleteShareToken,
   getPublicPageByToken,
   updatePublicBlockByToken,
+  addCollaborator,
+  getCollaborators,
+  updateCollaboratorRole,
+  removeCollaborator,
 };
