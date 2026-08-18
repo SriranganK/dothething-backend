@@ -81,7 +81,8 @@ const getDashboardAnalytics = async (req, res) => {
       const msItems = await Item.find({ milestone_id: milestone._id, archived: { $ne: true } });
       let completed = 0;
       msItems.forEach(item => {
-        const isDone = doneColsMap[item.board.toString()]?.includes(item.columnId) || false;
+        const boardIdStr = item.board ? item.board.toString() : '';
+        const isDone = doneColsMap[boardIdStr]?.includes(item.columnId) || false;
         if (isDone) completed++;
       });
       const progress = msItems.length > 0 ? Math.round((completed / msItems.length) * 100) : 0;
@@ -146,7 +147,8 @@ const getDashboardAnalytics = async (req, res) => {
       
       // Count items updated on this date that are currently in Done
       const count = items.filter(item => {
-        const isDone = doneColsMap[item.board.toString()]?.includes(item.columnId) || false;
+        const boardIdStr = item.board ? item.board.toString() : '';
+        const isDone = doneColsMap[boardIdStr]?.includes(item.columnId) || false;
         if (!isDone) return false;
         const updateStr = new Date(item.updatedAt).toISOString().split('T')[0];
         return updateStr === dateStr;
@@ -160,7 +162,8 @@ const getDashboardAnalytics = async (req, res) => {
 
     // 7. Overdue Tasks
     const overdueTasks = items.filter(item => {
-      const isDone = doneColsMap[item.board.toString()]?.includes(item.columnId) || false;
+      const boardIdStr = item.board ? item.board.toString() : '';
+      const isDone = doneColsMap[boardIdStr]?.includes(item.columnId) || false;
       if (isDone) return false;
       return item.dueDate && new Date(item.dueDate) < new Date();
     }).map(item => ({

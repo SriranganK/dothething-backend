@@ -44,14 +44,8 @@ const scratchBlockSchema = new mongoose.Schema(
       default: '',
     },
     properties: {
-      checked: { type: Boolean, default: false },
-      dueDate: { type: Date, default: null },
-      priority: { type: String, enum: ['Low', 'Medium', 'High', 'Urgent'], default: 'Medium' },
-      assignee: { type: String, default: '' },
-      tags: [{ type: String }],
-      language: { type: String, default: 'text' },
-      linkedEntityType: { type: String, enum: ['task', 'board', null], default: null },
-      linkedEntityId: { type: String, default: null },
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
     },
     order: {
       type: Number,

@@ -21,7 +21,8 @@ const getMilestoneProgress = async (milestone) => {
   let overdue = 0;
 
   items.forEach(item => {
-    const isDone = doneColsByBoard[item.board.toString()]?.has(item.columnId) || false;
+    const boardIdStr = item.board ? item.board.toString() : '';
+    const isDone = doneColsByBoard[boardIdStr]?.has(item.columnId) || false;
     if (isDone) {
       completed++;
     } else {
@@ -222,11 +223,12 @@ const getMilestoneAnalytics = async (req, res) => {
     const items = await Item.find({ milestone_id: milestone._id, archived: { $ne: true } });
     
     const tasks = items.map(item => {
-      const isDone = doneColsByBoard[item.board.toString()]?.has(item.columnId) || false;
+      const boardIdStr = item.board ? item.board.toString() : '';
+      const isDone = doneColsByBoard[boardIdStr]?.has(item.columnId) || false;
       return {
         ...item.toObject(),
         status: isDone ? 'Done' : 'Open',
-        boardName: boardNames[item.board.toString()] || 'Unknown Board'
+        boardName: boardNames[boardIdStr] || 'Unknown Board'
       };
     });
 

@@ -134,6 +134,12 @@ const updatePage = async (req, res) => {
 
     await page.save();
 
+    const SocketService = require('../services/SocketService');
+    SocketService.broadcastToScratchPage(id, 'scratch:page-updated', {
+      page,
+      senderId: req.user._id,
+    });
+
     return res.status(200).json({ page });
   } catch (error) {
     console.error('Error updating scratch page:', error);
@@ -270,6 +276,12 @@ const createBlock = async (req, res) => {
       order,
     });
 
+    const SocketService = require('../services/SocketService');
+    SocketService.broadcastToScratchPage(pageId.toString(), 'scratch:block-created', {
+      block,
+      senderId: req.user._id,
+    });
+
     return res.status(201).json({ block });
   } catch (error) {
     console.error('Error creating block:', error);
@@ -293,7 +305,8 @@ const updateBlock = async (req, res) => {
     if (type !== undefined) block.type = type;
     if (content !== undefined) block.content = content;
     if (properties !== undefined) {
-      block.properties = { ...block.properties, ...properties };
+      block.properties = { ...(block.properties || {}), ...properties };
+      block.markModified('properties');
     }
     if (order !== undefined) block.order = order;
 
@@ -322,6 +335,12 @@ const deleteBlock = async (req, res) => {
     if (!block) {
       return res.status(404).json({ message: 'Block not found' });
     }
+
+    const SocketService = require('../services/SocketService');
+    SocketService.broadcastToScratchPage(block.pageId.toString(), 'scratch:block-deleted', {
+      blockId,
+      senderId: req.user._id,
+    });
 
     return res.status(200).json({ message: 'Block deleted successfully', blockId });
   } catch (error) {
@@ -352,6 +371,12 @@ const reorderBlocks = async (req, res) => {
     if (bulkOps.length > 0) {
       await ScratchBlock.bulkWrite(bulkOps);
     }
+
+    const SocketService = require('../services/SocketService');
+    SocketService.broadcastToScratchPage(pageId, 'scratch:blocks-reordered', {
+      blocks,
+      senderId: req.user._id,
+    });
 
     return res.status(200).json({ message: 'Blocks reordered successfully' });
   } catch (error) {

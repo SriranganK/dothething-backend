@@ -78,6 +78,19 @@ const init = (socketIoInstance) => {
       }
     });
 
+    // Real-time zero-latency typing sync relay across co-editors
+    socket.on('scratch:block-typing', (data) => {
+      if (data?.pageId) {
+        socket.to(`scratch:${data.pageId}`).emit('scratch:block-typing', data);
+      }
+    });
+
+    socket.on('scratch:title-typing', (data) => {
+      if (data?.pageId) {
+        socket.to(`scratch:${data.pageId}`).emit('scratch:title-typing', data);
+      }
+    });
+
     socket.on('disconnect', () => {
       console.log(`Socket disconnected: ${socket.id} (User: ${userId})`);
       if (userSockets.has(userId)) {

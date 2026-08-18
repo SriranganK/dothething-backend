@@ -65,7 +65,7 @@ const getPresignedUploadUrl = async (req, res) => {
     } else {
       // Local Mock fallback
       const uploadUrl = `${req.protocol}://${req.get('host')}/api/attachments/upload-local?key=${encodeURIComponent(storageKey)}`;
-      const publicUrl = `${req.protocol}://${req.get('host')}/uploads/${storageKey.replace(/\//g, '_')}`;
+      const publicUrl = `${req.protocol}://${req.get('host')}/uploads/${storageKey}`;
 
       return res.status(200).json({
         uploadUrl,
@@ -87,15 +87,15 @@ const uploadLocalFile = async (req, res) => {
       return res.status(400).json({ message: 'key query parameter is required' });
     }
 
-    // Save to local directory
+    // Sanitize storage key to prevent directory traversal
+    const safeKey = path.normalize(storageKey).replace(/^(\.\.[\/\\])+/, '');
     const uploadsDir = path.join(__dirname, '../../uploads');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
+    const destPath = path.join(uploadsDir, safeKey);
 
-    // Replace slashes with underscores for flat local storage naming
-    const safeFilename = storageKey.replace(/\//g, '_');
-    const destPath = path.join(uploadsDir, safeFilename);
+    const dirPath = path.dirname(destPath);
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+    }
 
     const writeStream = fs.createWriteStream(destPath);
     
@@ -112,7 +112,7 @@ const uploadLocalFile = async (req, res) => {
     req.pipe(writeStream);
 
     writeStream.on('finish', () => {
-      res.status(200).json({ success: true, message: 'Local upload complete' });
+      res.status(200).json({ success: true, message: 'Local upload complete', key: safeKey });
     });
 
     req.on('error', (err) => {
