@@ -39,7 +39,7 @@ const updateProfile = async (req, res) => {
         twoFactorEnabled: twoFactorEnabled !== undefined ? twoFactorEnabled : undefined,
       },
       {
-        new: true,
+        returnDocument: 'after',
       }
     ).select('-password');
 

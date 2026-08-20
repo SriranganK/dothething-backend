@@ -1,84 +1,114 @@
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const GROK_API_KEY = process.env.GROK_API_KEY;
-
 /**
- * Make a chat completion request to Groq (Llama-3.3-70b) or fallback to Grok (Grok-Beta)
+ * Make a chat completion request using Groq or fallback to Grok (xAI).
+ * Uses automatic model fallbacks if a specific model ID is decommissioned or unavailable.
  */
 async function getAICompletion(systemPrompt, userPrompt, responseJson = true) {
-  // 1. Try Groq first
-  try {
-    const payload = {
-      model: 'llama-3.3-70b-versatile',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      temperature: 0.2
-    };
+  const GROQ_API_KEY = process.env.GROQ_API_KEY;
+  const GROK_API_KEY = process.env.GROK_API_KEY;
 
-    if (responseJson) {
-      payload.response_format = { type: 'json_object' };
-    }
+  const GROQ_MODELS = Array.from(new Set([
+    process.env.GROQ_MODEL,
+    'openai/gpt-oss-120b',
+    'openai/gpt-oss-20b',
+    'groq/compound-mini',
+    'groq/compound',
+    'llama-3.3-70b-versatile'
+  ].filter(Boolean)));
 
-    console.log('[AI Service] Attempting request with Groq...');
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROQ_API_KEY}`
-      },
-      body: JSON.stringify(payload)
-    });
+  const GROK_MODELS = Array.from(new Set([
+    process.env.GROK_MODEL,
+    'grok-2-latest',
+    'grok-2',
+    'grok-beta'
+  ].filter(Boolean)));
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Groq API error (status ${response.status}): ${errorText}`);
-    }
+  let lastError = null;
 
-    const data = await response.json();
-    return data.choices[0].message.content;
+  // 1. Try Groq provider models
+  if (GROQ_API_KEY) {
+    for (const model of GROQ_MODELS) {
+      try {
+        const payload = {
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.2
+        };
 
-  } catch (groqError) {
-    console.error('[AI Service] Groq API failed. Falling back to Grok (xAI)...', groqError.message);
+        if (responseJson) {
+          payload.response_format = { type: 'json_object' };
+        }
 
-    // 2. Fallback to Grok
-    try {
-      const payload = {
-        model: 'grok-beta',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.2
-      };
+        console.log(`[AI Service] Attempting request with Groq (${model})...`);
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${GROQ_API_KEY}`
+          },
+          body: JSON.stringify(payload)
+        });
 
-      if (responseJson) {
-        payload.response_format = { type: 'json_object' };
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Groq API error for ${model} (status ${response.status}): ${errorText}`);
+        }
+
+        const data = await response.json();
+        console.log(`[AI Service] Groq (${model}) request succeeded.`);
+        return data.choices[0].message.content;
+      } catch (groqError) {
+        console.warn(`[AI Service] Groq model (${model}) failed: ${groqError.message}`);
+        lastError = groqError;
       }
-
-      console.log('[AI Service] Attempting request with Grok...');
-      const response = await fetch('https://api.x.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${GROK_API_KEY}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Grok API error (status ${response.status}): ${errorText}`);
-      }
-
-      const data = await response.json();
-      return data.choices[0].message.content;
-
-    } catch (grokError) {
-      console.error('[AI Service] Fallback to Grok also failed:', grokError.message);
-      throw new Error(`AI Request failed: ${grokError.message}`);
     }
   }
+
+  // 2. Fallback to Grok (xAI) provider models
+  if (GROK_API_KEY) {
+    for (const model of GROK_MODELS) {
+      try {
+        const payload = {
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.2
+        };
+
+        if (responseJson) {
+          payload.response_format = { type: 'json_object' };
+        }
+
+        console.log(`[AI Service] Attempting request with Grok (${model})...`);
+        const response = await fetch('https://api.x.ai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${GROK_API_KEY}`
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Grok API error for ${model} (status ${response.status}): ${errorText}`);
+        }
+
+        const data = await response.json();
+        console.log(`[AI Service] Grok (${model}) request succeeded.`);
+        return data.choices[0].message.content;
+      } catch (grokError) {
+        console.warn(`[AI Service] Grok model (${model}) failed: ${grokError.message}`);
+        lastError = grokError;
+      }
+    }
+  }
+
+  throw new Error(`AI Request failed: ${lastError ? lastError.message : 'No AI API keys configured or all providers failed'}`);
 }
 
 /**
@@ -129,8 +159,10 @@ You MUST respond with a single valid JSON object matching this structure EXACTLY
 }
 Rules:
 - Respond ONLY with the JSON object. Do not include markdown wraps or extra explanations.
-- Create 3 to 5 columns. Ensure one column represents completed work and has "isDone": true.
-- Create 5 to 10 relevant tasks. Ensure columnId values in items match one of the column ids in the columns array.
+- Create 3 to 5 columns (or custom columns if requested in prompt). Ensure one final column represents completed work and has "isDone": true.
+- ALL created tasks MUST have their columnId set to the ID of the VERY FIRST column (index 0 in the columns array, e.g., "todo", "backlog", or "brainstorming"). Do NOT place tasks into "In Progress", "Done", or later columns. Every new task must start in the first column so the user can work through items sequentially.
+- Sort and list tasks in logical, sequential project execution order.
+- Create 5 to 10 relevant tasks. Ensure columnId values in items match the ID of the first column in the columns array.
 - "type" must be one of: 'Task', 'Bug', 'Lead', 'Idea', 'Issue', 'Event', 'Feature', 'Research', 'Documentation'.
 - "priority" must be one of: 'Lowest', 'Low', 'Medium', 'High', 'Highest', 'Critical'.`;
 

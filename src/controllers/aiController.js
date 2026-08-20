@@ -76,11 +76,12 @@ const generateBoard = async (req, res) => {
       createdBy: req.user._id
     });
 
-    // Create tasks
+    // Create tasks - Place all tickets in the first column in sequential order
     if (items.length > 0) {
+      const firstColumnId = columns && columns.length > 0 ? columns[0].id : 'todo';
       const itemsToCreate = items.map((item, index) => ({
         board: board._id,
-        columnId: item.columnId || columns[0].id,
+        columnId: firstColumnId,
         title: item.title,
         description: item.description || '',
         type: item.type || 'Task',
@@ -1091,7 +1092,7 @@ const workspaceChat = async (req, res) => {
     }
 
     // Get all boards in the workspace
-    const boards = await Board.find({ workspaceId });
+    const boards = await Board.find({ workspace: workspaceId });
     const boardIds = boards.map(b => b._id);
 
     // Get all items in those boards
@@ -1169,7 +1170,7 @@ const executeChatActions = async (actions, workspaceId, defaultBoardId, user) =>
         if (defaultBoardId) {
           searchBoardIds.push(defaultBoardId);
         } else if (workspaceId) {
-          const boards = await Board.find({ workspaceId });
+          const boards = await Board.find({ workspace: workspaceId });
           searchBoardIds.push(...boards.map(b => b._id));
         }
 

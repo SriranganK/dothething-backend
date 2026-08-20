@@ -103,7 +103,7 @@ const buildCtaHtml = (text, url) => {
  * @returns {Object} { subject, html, text }
  */
 const renderEmail = (type, data = {}) => {
-  const FRONTEND_URL = process.env.FRONTEND_URL || 'http://8.235.44.47:5000';
+  const FRONTEND_URL = process.env.FRONTEND_URL || 'https://dothething.work.gd';
   let subject = '';
   let headerContext = '';
   let title = '';

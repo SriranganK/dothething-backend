@@ -20,7 +20,7 @@ const getWorkspaces = async (req, res) => {
       await WorkspaceMember.findOneAndUpdate(
         { workspaceId: ws._id, userId: req.user._id },
         { $setOnInsert: { role: 'OWNER' } },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after' }
       );
     }
 
@@ -31,7 +31,7 @@ const getWorkspaces = async (req, res) => {
       await WorkspaceMember.findOneAndUpdate(
         { workspaceId: ws._id, userId: req.user._id },
         { $setOnInsert: { role: 'MEMBER' } },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after' }
       );
     }
 
@@ -133,8 +133,12 @@ const createWorkspace = async (req, res) => {
   try {
     const { name, type, teamSize, industry, members } = req.body;
 
-    if (!name || !type || !teamSize || !industry) {
-      return res.status(400).json({ message: 'All fields (name, type, teamSize, industry) are required' });
+    const finalType = type || 'Personal';
+    const finalTeamSize = teamSize || 'Just me';
+    const finalIndustry = (industry && industry.trim()) ? industry.trim() : 'General';
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ message: 'Workspace name is required' });
     }
 
     // Clean member emails
@@ -144,10 +148,10 @@ const createWorkspace = async (req, res) => {
       .filter(email => email && email !== ownerEmail);
 
     const workspace = await Workspace.create({
-      name,
-      type,
-      teamSize,
-      industry,
+      name: name.trim(),
+      type: finalType,
+      teamSize: finalTeamSize,
+      industry: finalIndustry,
       owner: req.user._id,
       members: cleanMembers,
     });
