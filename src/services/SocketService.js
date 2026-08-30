@@ -89,6 +89,9 @@ const init = (socketIoInstance) => {
       if (data?.pageId) {
         socket.to(`scratch:${data.pageId}`).emit('scratch:title-typing', data);
       }
+      if (data?.workspaceId) {
+        socket.to(`workspace:${data.workspaceId}`).emit('scratch:title-typing', data);
+      }
     });
 
     socket.on('disconnect', () => {

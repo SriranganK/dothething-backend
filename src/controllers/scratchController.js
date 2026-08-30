@@ -104,6 +104,9 @@ const createPage = async (req, res) => {
       order: 0,
     });
 
+    const SocketService = require('../services/SocketService');
+    SocketService.broadcastToWorkspace(workspaceId.toString(), 'scratch:page-created', { page });
+
     return res.status(201).json({ page, blocks: [initialBlock] });
   } catch (error) {
     console.error('Error creating scratch page:', error);
@@ -139,6 +142,12 @@ const updatePage = async (req, res) => {
       page,
       senderId: req.user._id,
     });
+    if (page.workspace) {
+      SocketService.broadcastToWorkspace(page.workspace.toString(), 'scratch:page-updated', {
+        page,
+        senderId: req.user._id,
+      });
+    }
 
     return res.status(200).json({ page });
   } catch (error) {
@@ -174,6 +183,12 @@ const deletePage = async (req, res) => {
     // Delete blocks & pages
     await ScratchBlock.deleteMany({ pageId: { $in: allPageIdsToDelete } });
     await ScratchPage.deleteMany({ _id: { $in: allPageIdsToDelete } });
+
+    const SocketService = require('../services/SocketService');
+    SocketService.broadcastToWorkspace(targetPage.workspace.toString(), 'scratch:page-deleted', {
+      pageId: id,
+      deletedPageIds: allPageIdsToDelete,
+    });
 
     return res.status(200).json({ message: 'Page and subpages deleted successfully', deletedPageIds: allPageIdsToDelete });
   } catch (error) {
@@ -346,6 +361,139 @@ const deleteBlock = async (req, res) => {
   } catch (error) {
     console.error('Error deleting block:', error);
     return res.status(500).json({ message: 'Failed to delete block' });
+  }
+};
+
+/**
+ * Batch delete blocks
+ */
+const deleteBlocksBatch = async (req, res) => {
+  try {
+    const { pageId } = req.params;
+    const { blockIds } = req.body;
+
+    if (!Array.isArray(blockIds) || blockIds.length === 0) {
+      return res.status(400).json({ message: 'blockIds array is required' });
+    }
+
+    const page = await ScratchPage.findById(pageId);
+    if (!page) {
+      return res.status(404).json({ message: 'Scratch page not found' });
+    }
+
+    await ScratchBlock.deleteMany({ _id: { $in: blockIds }, pageId });
+
+    // Ensure at least one block remains on the page
+    const remainingCount = await ScratchBlock.countDocuments({ pageId });
+    let fallbackBlock = null;
+    if (remainingCount === 0) {
+      fallbackBlock = await ScratchBlock.create({
+        pageId,
+        workspace: page.workspace,
+        type: 'paragraph',
+        content: '',
+        order: 0,
+      });
+    }
+
+    const SocketService = require('../services/SocketService');
+    SocketService.broadcastToScratchPage(pageId.toString(), 'scratch:blocks-batch-deleted', {
+      blockIds,
+      fallbackBlock,
+      senderId: req.user._id,
+    });
+
+    return res.status(200).json({
+      message: 'Blocks deleted successfully',
+      deletedBlockIds: blockIds,
+      fallbackBlock,
+    });
+  } catch (error) {
+    console.error('Error batch deleting blocks:', error);
+    return res.status(500).json({ message: 'Failed to batch delete blocks' });
+  }
+};
+
+/**
+ * Batch create blocks on a page (paste / import)
+ */
+const createBlocksBatch = async (req, res) => {
+  try {
+    const { pageId } = req.params;
+    const { blocks, afterBlockId, replaceBlockId } = req.body;
+
+    if (!Array.isArray(blocks) || blocks.length === 0) {
+      return res.status(400).json({ message: 'Blocks array is required' });
+    }
+
+    const page = await ScratchPage.findById(pageId);
+    if (!page) {
+      return res.status(404).json({ message: 'Scratch page not found' });
+    }
+
+    let startingOrder = 0;
+    let replacedBlock = null;
+    let blocksToInsert = [...blocks];
+
+    if (replaceBlockId) {
+      const blockToReplace = await ScratchBlock.findById(replaceBlockId);
+      if (blockToReplace) {
+        const first = blocksToInsert[0];
+        blockToReplace.type = first.type || 'paragraph';
+        blockToReplace.content = first.content || '';
+        blockToReplace.properties = first.properties || {};
+        await blockToReplace.save();
+        replacedBlock = blockToReplace;
+
+        startingOrder = blockToReplace.order + 1;
+        blocksToInsert = blocksToInsert.slice(1);
+      }
+    } else if (afterBlockId) {
+      const prevBlock = await ScratchBlock.findById(afterBlockId);
+      if (prevBlock) {
+        startingOrder = prevBlock.order + 1;
+      }
+    } else {
+      const lastBlock = await ScratchBlock.findOne({ pageId }).sort({ order: -1 }).lean();
+      startingOrder = lastBlock ? lastBlock.order + 1 : 0;
+    }
+
+    let createdBlocks = [];
+    if (blocksToInsert.length > 0) {
+      // Shift existing blocks after startingOrder
+      await ScratchBlock.updateMany(
+        { pageId, order: { $gte: startingOrder } },
+        { $inc: { order: blocksToInsert.length } }
+      );
+
+      const docs = blocksToInsert.map((b, idx) => ({
+        pageId,
+        workspace: page.workspace,
+        type: b.type || 'paragraph',
+        content: b.content || '',
+        properties: b.properties || {},
+        order: startingOrder + idx,
+      }));
+
+      createdBlocks = await ScratchBlock.insertMany(docs);
+    }
+
+    const allAffectedBlocks = replacedBlock ? [replacedBlock, ...createdBlocks] : createdBlocks;
+
+    const SocketService = require('../services/SocketService');
+    SocketService.broadcastToScratchPage(pageId.toString(), 'scratch:blocks-batch-created', {
+      blocks: allAffectedBlocks,
+      replacedBlockId: replaceBlockId || null,
+      senderId: req.user._id,
+    });
+
+    return res.status(201).json({
+      blocks: allAffectedBlocks,
+      replacedBlock: replacedBlock || null,
+    });
+  } catch (error) {
+    console.error('Error creating blocks batch:', error);
+    return res.status(500).json({ message: 'Failed to create blocks batch' });
   }
 };
 
@@ -809,8 +957,10 @@ module.exports = {
   duplicatePage,
   getBlocks,
   createBlock,
+  createBlocksBatch,
   updateBlock,
   deleteBlock,
+  deleteBlocksBatch,
   reorderBlocks,
   getComments,
   createComment,

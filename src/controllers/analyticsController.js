@@ -36,13 +36,15 @@ const getDashboardAnalytics = async (req, res) => {
     
     boards.forEach(b => {
       doneColsMap[b._id.toString()] = [];
-      b.columns.forEach(col => {
-        const category = classifyColumn(col);
-        colIdToStatus[col.id] = category;
-        if (category === 'Done') {
-          doneColsMap[b._id.toString()].push(col.id);
-        }
-      });
+      if (b.columns && Array.isArray(b.columns)) {
+        b.columns.forEach(col => {
+          const category = classifyColumn(col);
+          colIdToStatus[col.id] = category;
+          if (category === 'Done') {
+            doneColsMap[b._id.toString()].push(col.id);
+          }
+        });
+      }
     });
 
     const items = await Item.find({ board: { $in: boardIds }, archived: { $ne: true } });
@@ -101,8 +103,8 @@ const getDashboardAnalytics = async (req, res) => {
     const members = await WorkspaceMember.find({ workspaceId }).populate('userId', 'name email');
     const emailToName = {};
     members.forEach(m => {
-      if (m.userId) {
-        emailToName[m.userId.email.toLowerCase()] = m.userId.name;
+      if (m.userId && m.userId.email) {
+        emailToName[m.userId.email.toLowerCase()] = m.userId.name || m.userId.email;
       }
     });
 

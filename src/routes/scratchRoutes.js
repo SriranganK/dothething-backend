@@ -16,8 +16,10 @@ const {
   duplicatePage,
   getBlocks,
   createBlock,
+  createBlocksBatch,
   updateBlock,
   deleteBlock,
+  deleteBlocksBatch,
   reorderBlocks,
   getComments,
   createComment,
@@ -59,6 +61,8 @@ router.delete('/pages/:id/collaborators/:userId', requireScratchPagePermission('
 // Block routes
 router.get('/pages/:pageId/blocks', requireScratchPagePermission('view'), getBlocks);
 router.post('/pages/:pageId/blocks', requireScratchPagePermission('edit'), createBlock);
+router.post('/pages/:pageId/blocks/batch', requireScratchPagePermission('edit'), createBlocksBatch);
+router.post('/pages/:pageId/blocks/batch-delete', requireScratchPagePermission('edit'), deleteBlocksBatch);
 router.patch('/blocks/:blockId', requireScratchBlockPermission('edit'), updateBlock);
 router.delete('/blocks/:blockId', requireScratchBlockPermission('edit'), deleteBlock);
 router.post('/pages/:pageId/blocks/reorder', requireScratchPagePermission('edit'), reorderBlocks);
